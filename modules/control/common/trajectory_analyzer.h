@@ -156,6 +156,10 @@ class TrajectoryAnalyzer {
 
   double header_time_ = 0.0;
   unsigned int seq_num_ = 0;
+
+  // 010 changed
+  public:
+    mutable double vehicle_heading_;  
 };
 
 }  // namespace control

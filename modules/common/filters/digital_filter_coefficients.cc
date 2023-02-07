@@ -30,11 +30,11 @@ void LpfCoefficients(const double ts, const double cutoff_freq,
   denominators->reserve(3);
   numerators->reserve(3);
 
-  double wa = 2.0 * M_PI * cutoff_freq;  // Analog frequency in rad/s
-  double alpha = wa * ts / 2.0;          // tan(Wd/2), Wd is discrete frequency
-  double alpha_sqr = alpha * alpha;
-  double tmp_term = std::sqrt(2.0) * alpha + alpha_sqr;
-  double gain = alpha_sqr / (1.0 + tmp_term);
+  double wa = 2.0 * M_PI * cutoff_freq;  // Analog frequency in rad/s  20pi
+  double alpha = wa * ts / 2.0;          // tan(Wd/2), Wd is discrete frequency  0.1pi
+  double alpha_sqr = alpha * alpha;  // 0.01pi^2
+  double tmp_term = std::sqrt(2.0) * alpha + alpha_sqr;  // sqrt(2.0) * 0.1pi + 0.01pi^2
+  double gain = alpha_sqr / (1.0 + tmp_term);  // 0.01pi / (1.0 + sqrt(2.0) * 0.1pi + 0.01pi^2)
 
   denominators->push_back(1.0);
   denominators->push_back(2.0 * (alpha_sqr - 1.0) / (1.0 + tmp_term));

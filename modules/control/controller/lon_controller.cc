@@ -19,6 +19,7 @@
 #include <utility>
 
 #include "absl/strings/str_cat.h"
+
 #include "cyber/common/log.h"
 #include "cyber/time/time.h"
 #include "modules/common/configs/vehicle_config_helper.h"
@@ -104,7 +105,7 @@ Status LonController::Init(std::shared_ptr<DependencyInjector> injector,
   const LonControllerConf &lon_controller_conf =
       control_conf_->lon_controller_conf();
   double ts = lon_controller_conf.ts();
-  bool enable_leadlag =
+  bool enable_leadlag =  // false
       lon_controller_conf.enable_reverse_leadlag_compensation();
 
   station_pid_controller_.Init(lon_controller_conf.station_pid_conf());
@@ -181,9 +182,9 @@ Status LonController::ComputeControlCommand(
 
   double brake_cmd = 0.0;
   double throttle_cmd = 0.0;
-  double ts = lon_controller_conf.ts();
-  double preview_time = lon_controller_conf.preview_window() * ts;
-  bool enable_leadlag =
+  double ts = lon_controller_conf.ts();                             // 0.01
+  double preview_time = lon_controller_conf.preview_window() * ts;  // 20 * 0.01
+  bool enable_leadlag =                                             // false
       lon_controller_conf.enable_reverse_leadlag_compensation();
 
   if (preview_time < 0.0) {
@@ -192,12 +193,14 @@ Status LonController::ComputeControlCommand(
     AERROR << error_msg;
     return Status(ErrorCode::CONTROL_COMPUTE_ERROR, error_msg);
   }
+  //.get()得到存储的指针
   ComputeLongitudinalErrors(trajectory_analyzer_.get(), preview_time, ts,
                             debug);
 
-  double station_error_limit = lon_controller_conf.station_error_limit();
+  double station_error_limit =
+      lon_controller_conf.station_error_limit();  // 2.0
   double station_error_limited = 0.0;
-  if (FLAGS_enable_speed_station_preview) {
+  if (FLAGS_enable_speed_station_preview) {  // true
     station_error_limited =
         common::math::Clamp(debug->preview_station_error(),
                             -station_error_limit, station_error_limit);
@@ -207,25 +210,27 @@ Status LonController::ComputeControlCommand(
   }
 
   if (trajectory_message_->gear() == canbus::Chassis::GEAR_REVERSE) {
-    station_pid_controller_.SetPID(
+    station_pid_controller_.SetPID(  // 倒车时更新PID配置信息
         lon_controller_conf.reverse_station_pid_conf());
     speed_pid_controller_.SetPID(lon_controller_conf.reverse_speed_pid_conf());
-    if (enable_leadlag) {
+    if (enable_leadlag) {  // false
       station_leadlag_controller_.SetLeadlag(
           lon_controller_conf.reverse_station_leadlag_conf());
       speed_leadlag_controller_.SetLeadlag(
           lon_controller_conf.reverse_speed_leadlag_conf());
     }
   } else if (injector_->vehicle_state()->linear_velocity() <=
-             lon_controller_conf.switch_speed()) {
+             lon_controller_conf.switch_speed()) {  // 3.0
+    // kp = 0.2 // ki = 0.3 // kd = 0.0
     speed_pid_controller_.SetPID(lon_controller_conf.low_speed_pid_conf());
   } else {
+    // kp = 0.1 // ki = 0.3 // kd = 0.0
     speed_pid_controller_.SetPID(lon_controller_conf.high_speed_pid_conf());
   }
 
   double speed_offset =
       station_pid_controller_.Control(station_error_limited, ts);
-  if (enable_leadlag) {
+  if (enable_leadlag) {  // false
     speed_offset = station_leadlag_controller_.Control(speed_offset, ts);
   }
 
@@ -233,7 +238,7 @@ Status LonController::ComputeControlCommand(
   double speed_controller_input_limit =
       lon_controller_conf.speed_controller_input_limit();
   double speed_controller_input_limited = 0.0;
-  if (FLAGS_enable_speed_station_preview) {
+  if (FLAGS_enable_speed_station_preview) {  // true
     speed_controller_input = speed_offset + debug->preview_speed_error();
   } else {
     speed_controller_input = speed_offset + debug->speed_error();
@@ -246,15 +251,16 @@ Status LonController::ComputeControlCommand(
 
   acceleration_cmd_closeloop =
       speed_pid_controller_.Control(speed_controller_input_limited, ts);
-  debug->set_pid_saturation_status(
+  debug->set_pid_saturation_status(  // 没什么用？ 该参数并没有被使用
       speed_pid_controller_.IntegratorSaturationStatus());
-  if (enable_leadlag) {
+  if (enable_leadlag) {  // false
     acceleration_cmd_closeloop =
         speed_leadlag_controller_.Control(acceleration_cmd_closeloop, ts);
     debug->set_leadlag_saturation_status(
         speed_leadlag_controller_.InnerstateSaturationStatus());
   }
 
+  // GRA_ACC = 9.8
   double slope_offset_compensation = digital_filter_pitch_angle_.Filter(
       GRA_ACC * std::sin(injector_->vehicle_state()->pitch()));
 
@@ -275,34 +281,39 @@ Status LonController::ComputeControlCommand(
   if ((trajectory_message_->trajectory_type() ==
        apollo::planning::ADCTrajectory::NORMAL) &&
       ((std::fabs(debug->preview_acceleration_reference()) <=
-            control_conf_->max_acceleration_when_stopped() &&
+            control_conf_->max_acceleration_when_stopped() && /*max_acceleration_when_stopped
+                                                                 = 0.01*/
         std::fabs(debug->preview_speed_reference()) <=
-            vehicle_param_.max_abs_speed_when_stopped()) ||
+            vehicle_param_.max_abs_speed_when_stopped()) || /*max_abs_speed_when_stopped
+                                                               = 0.2*/
        std::abs(debug->path_remain()) <
-           control_conf_->max_path_remain_when_stopped())) {
+           control_conf_->max_path_remain_when_stopped())) { /*max_path_remain_when_stopped
+                                                                = 0.3*/
     acceleration_cmd =
         (chassis->gear_location() == canbus::Chassis::GEAR_REVERSE)
-            ? std::max(acceleration_cmd,
-                       -lon_controller_conf.standstill_acceleration())
+            ? std::max(
+                  acceleration_cmd,
+                  -lon_controller_conf.standstill_acceleration()) /*standstill_acceleration
+                                                                     = -0.3*/
             : std::min(acceleration_cmd,
                        lon_controller_conf.standstill_acceleration());
     ADEBUG << "Stop location reached";
-    debug->set_is_full_stop(true);
+    debug->set_is_full_stop(true);  // 貌似只用于csv文件
   }
 
   double throttle_lowerbound =
-      std::max(vehicle_param_.throttle_deadzone(),
-               lon_controller_conf.throttle_minimum_action());
+      std::max(vehicle_param_.throttle_deadzone(), /*0.154，15.4百分比表示*/
+               lon_controller_conf.throttle_minimum_action()); /*0.0*/
   double brake_lowerbound =
-      std::max(vehicle_param_.brake_deadzone(),
-               lon_controller_conf.brake_minimum_action());
+      std::max(vehicle_param_.brake_deadzone(), /*0.145，14.5百分比表示*/
+               lon_controller_conf.brake_minimum_action()); /*0.0*/
   double calibration_value = 0.0;
   double acceleration_lookup =
       (chassis->gear_location() == canbus::Chassis::GEAR_REVERSE)
           ? -acceleration_cmd
           : acceleration_cmd;
 
-  if (FLAGS_use_preview_speed_for_table) {
+  if (FLAGS_use_preview_speed_for_table) { //false
     calibration_value = control_interpolation_->Interpolate(
         std::make_pair(debug->preview_speed_reference(), acceleration_lookup));
   } else {
@@ -390,8 +401,11 @@ void LonController::ComputeLongitudinalErrors(
   double d_dot_matched = 0.0;
 
   auto vehicle_state = injector_->vehicle_state();
+  // 010 changed  trajectory_analyzer对象 初始化车辆的航向角
+  trajectory_analyzer->vehicle_heading_ = vehicle_state->vehicle_heading();
   auto matched_point = trajectory_analyzer->QueryMatchedPathPoint(
       vehicle_state->x(), vehicle_state->y());
+  trajectory_analyzer->vehicle_heading_ = 0;
 
   trajectory_analyzer->ToTrajectoryFrame(
       vehicle_state->x(), vehicle_state->y(), vehicle_state->heading(),
@@ -425,6 +439,7 @@ void LonController::ComputeLongitudinalErrors(
   ADEBUG << "reference point:" << reference_point.DebugString();
   ADEBUG << "preview point:" << preview_point.DebugString();
 
+  // delta_theta
   double heading_error = common::math::NormalizeAngle(vehicle_state->heading() -
                                                       matched_point.theta());
   double lon_speed = vehicle_state->linear_velocity() * std::cos(heading_error);

@@ -207,6 +207,20 @@ Status ControlComponent::ProduceControlCommand(
     estop_ = true;
     estop_reason_ = "estop for empty planning trajectory, planning headers: " +
                     local_view_.trajectory().header().ShortDebugString();
+  }else{ // 010 changed 
+    double pre_theta = local_view_.trajectory().trajectory_point(0).path_point().theta();
+    double pre_vel = local_view_.trajectory().trajectory_point(0).v();
+    for(int i = 1; i < local_view_.trajectory().trajectory_point().size(); i++){
+      if(std::fabs(pre_theta - local_view_.trajectory().trajectory_point(i).path_point().theta()) > 0.3 ||
+            std::fabs(pre_vel - local_view_.trajectory().trajectory_point(i).v()) > 1){
+              AWARN_EVERY(100) << "The speed or heading of the trajectory point has changed suddenly. ";
+              estop_ = true;
+      }
+      else{
+          pre_theta = local_view_.trajectory().trajectory_point(i).path_point().theta();
+          pre_vel = local_view_.trajectory().trajectory_point(i).v();
+      }
+    }
   }
 
   if (FLAGS_enable_gear_drive_negative_speed_protection) {
@@ -294,7 +308,7 @@ bool ControlComponent::Proc() {
     AERROR << "planning msg is not ready!";
     return false;
   }
-  OnPlanning(trajectory_msg);
+  OnPlanning(trajectory_msg); // latest_trajectory_ = trajectory_msg
 
   localization_reader_->Observe();
   const auto &localization_msg = localization_reader_->GetLatestObserved();

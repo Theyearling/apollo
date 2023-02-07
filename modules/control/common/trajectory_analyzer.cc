@@ -28,6 +28,8 @@
 #include "modules/common/math/search.h"
 #include "modules/control/common/control_gflags.h"
 
+#define M_PI_2		1.57079632679489661923
+
 using apollo::common::PathPoint;
 using apollo::common::TrajectoryPoint;
 
@@ -55,6 +57,7 @@ PathPoint TrajectoryPointToPathPoint(const TrajectoryPoint &point) {
 
 TrajectoryAnalyzer::TrajectoryAnalyzer(
     const planning::ADCTrajectory *planning_published_trajectory) {
+      vehicle_heading_ = 0;
   header_time_ = planning_published_trajectory->header().timestamp_sec();
   seq_num_ = planning_published_trajectory->header().sequence_num();
 
@@ -74,7 +77,8 @@ PathPoint TrajectoryAnalyzer::QueryMatchedPathPoint(const double x,
 
   for (size_t i = 1; i < trajectory_points_.size(); ++i) {
     double d_temp = PointDistanceSquare(trajectory_points_[i], x, y);
-    if (d_temp < d_min) {
+    // 010 changed 防止选到反方向的匹配点
+    if (d_temp < d_min && (vehicle_heading_ == 0 || std::fabs(vehicle_heading_ - trajectory_points_[i].path_point().theta()) < M_PI_2)) {
       d_min = d_temp;
       index_min = i;
     }
@@ -114,8 +118,7 @@ void TrajectoryAnalyzer::ToTrajectoryFrame(const double x, const double y,
   double cos_ref_theta = std::cos(ref_point.theta());
   double sin_ref_theta = std::sin(ref_point.theta());
 
-  // the sin of diff angle between vector (cos_ref_theta, sin_ref_theta) and
-  // (dx, dy)
+  // the sin of diff angle between vector (cos_ref_theta, sin_ref_theta) and (dx, dy)
   double cross_rd_nd = cos_ref_theta * dy - sin_ref_theta * dx;
   *ptr_d = cross_rd_nd;
 

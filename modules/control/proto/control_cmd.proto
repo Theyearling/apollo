@@ -30,8 +30,7 @@ message ControlCommand {
   // target brake in percentage [0, 100]
   optional double brake = 4;
 
-  // target non-directional steering rate, in percentage of full scale per
-  // second [0, 100]
+  // target non-directional steering rate, in percentage of full scale per second [0, 100]
   optional double steering_rate = 6;
 
   // target steering angle, in percentage of full scale [-100, 100]

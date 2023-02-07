@@ -50,6 +50,7 @@ double WrapAngle(const double angle) {
   return new_angle < 0 ? new_angle + M_PI * 2.0 : new_angle;
 }
 
+// angle >= -pai --> 输出angle本身； angle < -pai --> 输出(angle + pai)朝向，即2pai + (angle + pai) % 2pai
 double NormalizeAngle(const double angle) {
   double a = std::fmod(angle + M_PI, 2.0 * M_PI);
   if (a < 0.0) {

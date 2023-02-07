@@ -35,12 +35,12 @@ DigitalFilter::DigitalFilter(const std::vector<double> &denominators,
 }
 
 void DigitalFilter::set_denominators(const std::vector<double> &denominators) {
-  denominators_ = denominators;
+  denominators_ = denominators; // size = 3
   y_values_.resize(denominators_.size(), 0.0);
 }
 
 void DigitalFilter::set_numerators(const std::vector<double> &numerators) {
-  numerators_ = numerators;
+  numerators_ = numerators; // size = 3
   x_values_.resize(numerators_.size(), 0.0);
 }
 
@@ -67,6 +67,7 @@ double DigitalFilter::Filter(const double x_insert) {
       Compute(x_values_, numerators_, 0, numerators_.size() - 1);
 
   y_values_.pop_back();
+  // y_values_.size() == 2, 所以这里的系数下标要从1开始
   const double yside =
       Compute(y_values_, denominators_, 1, denominators_.size() - 1);
 

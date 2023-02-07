@@ -236,7 +236,7 @@ class LatController : public Controller {
   double previous_ref_heading_acceleration_ = 0.0;
 
   // for logging purpose
-  std::ofstream steer_log_file_;
+  std::ofstream steer_log_file_, my_log_file_;
 
   const std::string name_;
 

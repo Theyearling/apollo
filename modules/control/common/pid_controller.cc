@@ -37,11 +37,14 @@ double PIDController::Control(const double error, const double dt) {
     diff = (error - previous_error_) / dt;
   }
   // integral hold
+  // stationPID false | speedPID true |
   if (!integrator_enabled_) {
     integral_ = 0;
   } else if (!integrator_hold_) {
     integral_ += error * dt * ki_;
     // apply Ki before integrating to avoid steps when change Ki at steady state
+    //integrator_saturation_high_ = 0.3
+    //integrator_saturation_low_ = -0.3
     if (integral_ > integrator_saturation_high_) {
       integral_ = integrator_saturation_high_;
       integrator_saturation_status_ = 1;

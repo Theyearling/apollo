@@ -47,7 +47,7 @@ namespace math {
 template <typename T>
 T lerp(const T &x0, const double t0, const T &x1, const double t1,
        const double t) {
-  if (std::abs(t1 - t0) <= 1.0e-6) {
+  if (std::abs(t1 - t0) <= 1.0e-6) { // 永远false
     AERROR << "input time difference is too small";
     return x0;
   }
