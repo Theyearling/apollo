@@ -162,7 +162,6 @@ Status ControlComponent::ProduceControlCommand(
     ControlCommand *control_command) {
   Status status = CheckInput(&local_view_);
   // check data
-
   if (!status.ok()) {
     AERROR_EVERY(100) << "Control input data failed: "
                       << status.error_message();
@@ -176,7 +175,9 @@ Status ControlComponent::ProduceControlCommand(
     Status status_ts = CheckTimestamp(local_view_);
     if (!status_ts.ok()) {
       AERROR << "Input messages timeout";
-      // estop_ = true;
+      // Clear trajectory data to make control stop if no data received again
+      // next cycle.
+      trajectory_reader_->ClearData();
       status = status_ts;
       if (local_view_.chassis().driving_mode() !=
           apollo::canbus::Chassis::COMPLETE_AUTO_DRIVE) {
@@ -308,7 +309,15 @@ bool ControlComponent::Proc() {
     AERROR << "planning msg is not ready!";
     return false;
   }
+<<<<<<< HEAD
   OnPlanning(trajectory_msg); // latest_trajectory_ = trajectory_msg
+=======
+  // Check if new planning data received.
+  if (latest_trajectory_.header().sequence_num() !=
+      trajectory_msg->header().sequence_num()) {
+    OnPlanning(trajectory_msg);
+  }
+>>>>>>> b00c030ac02c54f98579d3d3e879dbf52f0d1d53
 
   localization_reader_->Observe();
   const auto &localization_msg = localization_reader_->GetLatestObserved();
@@ -378,7 +387,14 @@ bool ControlComponent::Proc() {
 
   ControlCommand control_command;
 
-  Status status = ProduceControlCommand(&control_command);
+  Status status;
+  if (local_view_.chassis().driving_mode() ==
+      apollo::canbus::Chassis::COMPLETE_AUTO_DRIVE) {
+    status = ProduceControlCommand(&control_command);
+  } else {
+    ResetAndProduceZeroControlCommand(&control_command);
+  }
+
   AERROR_IF(!status.ok()) << "Failed to produce control command:"
                           << status.error_message();
 
@@ -426,7 +442,6 @@ bool ControlComponent::Proc() {
         local_view_.trajectory().header().lidar_timestamp(), start_time,
         end_time);
   }
-
   control_cmd_writer_->Write(control_command);
   return true;
 }
@@ -499,6 +514,20 @@ Status ControlComponent::CheckTimestamp(const LocalView &local_view) {
     return Status(ErrorCode::CONTROL_COMPUTE_ERROR, "Trajectory msg timeout");
   }
   return Status::OK();
+}
+
+void ControlComponent::ResetAndProduceZeroControlCommand(
+    ControlCommand *control_command) {
+  control_command->set_throttle(0.0);
+  control_command->set_steering_target(0.0);
+  control_command->set_steering_rate(0.0);
+  control_command->set_speed(0.0);
+  control_command->set_brake(0.0);
+  control_command->set_gear_location(Chassis::GEAR_DRIVE);
+  controller_agent_.Reset();
+  latest_trajectory_.mutable_trajectory_point()->Clear();
+  latest_trajectory_.mutable_path_point()->Clear();
+  trajectory_reader_->ClearData();
 }
 
 }  // namespace control
