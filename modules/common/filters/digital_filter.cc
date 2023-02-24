@@ -61,8 +61,9 @@ double DigitalFilter::Filter(const double x_insert) {
     return 0.0;
   }
 
+  //初始为[0.0, 0.0, 0.0]
   x_values_.pop_back();
-  x_values_.push_front(x_insert);
+  x_values_.push_front(x_insert); 
   const double xside =
       Compute(x_values_, numerators_, 0, numerators_.size() - 1);
 
