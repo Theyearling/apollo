@@ -82,7 +82,7 @@ std::string myGetLogFileName() {
   std::time(&raw_time);
   std::tm time_tm;
   localtime_r(&raw_time, &time_tm);
-  strftime(name_buffer, 80, "/tmp/my_%F_%H%M%S.csv",
+  strftime(name_buffer, 80, "/apollo/data/bag/my_%F_%H%M%S.csv",
            &time_tm);
   return std::string(name_buffer);
 }
@@ -104,7 +104,7 @@ LatController::LatController() : name_("LQR-based Lateral Controller") {
   }
   my_log_file_.open(myGetLogFileName());
   my_log_file_ << std::fixed;
-  my_log_file_ << std::setprecision(6);
+  my_log_file_ << std::setprecision(11);
   myWriteData(my_log_file_);
   AINFO << "Using " << name_;
 }
@@ -510,7 +510,10 @@ Status LatController::ComputeControlCommand(
   }
 
   // Add gain scheduler for higher speed steering
-  if (FLAGS_enable_gain_scheduler) { // false
+  if (FLAGS_enable_gain_scheduler) { // 在modules/control/conf/control.conf置为true
+  //对lat_err_gain_scheduler中的数据进行升序排序
+  // 若当前速度小于最小速度，则返回最小速度对应的ration，若大于最大速度，则返回对应的ration
+  // 否则，进行样条曲线拟合，缩小为[0, 1]之间的值
     matrix_q_updated_(0, 0) =
         matrix_q_(0, 0) * lat_err_interpolation_->Interpolate(
                               std::fabs(vehicle_state->linear_velocity()));
@@ -540,6 +543,8 @@ Status LatController::ComputeControlCommand(
   // Augment the feedback control on lateral error at the desired speed domain
   if (enable_leadlag_) { // true
     // FLAGS_enable_feedback_augment_on_high_speed = false; 
+    // 在modules/control/common/control_gflags.cc中赋值（但是实际不影响）
+    // 在modules/control/conf/control.conf中真正赋值
     // 线速度 < 3 ?
     if (FLAGS_enable_feedback_augment_on_high_speed ||
         std::fabs(vehicle_state->linear_velocity()) < low_speed_bound_) {
@@ -560,9 +565,25 @@ Status LatController::ComputeControlCommand(
   steer_angle = steer_angle_feedback + steer_angle_feedforward +
                 steer_angle_feedback_augment;
 
+  // add PID
+  double my_kp = 0.8;
+  double my_ki = 0.0;
+  double my_kd = 0.0;
+  my_integral += debug->lateral_error() * ts_ * my_ki; 
+  if (my_integral > 0.3) {
+      my_integral = 0.3;
+    } else if (my_integral < -0.3) {
+      my_integral = -0.3;
+    }
+  double angle_pid = debug->lateral_error() * my_kp + my_integral + 
+    my_kd * (debug->lateral_error() - pre_lateral_err) / ts_;
+  pre_lateral_err = debug->lateral_error();
+  steer_angle -= angle_pid;
+  // end
+
   // Compute the steering command limit with the given maximum lateral
   // acceleration
-  // FLAGS_set_steer_limit = false，实际运行时是true，奇怪
+  // FLAGS_set_steer_limit = false，实际运行时是true，奇怪（在modules/control/conf/control.conf赋值为true）
   const double steer_limit =
       FLAGS_set_steer_limit ? std::atan(max_lat_acc_ * wheelbase_ /
                                         (vehicle_state->linear_velocity() *
@@ -577,7 +598,6 @@ Status LatController::ComputeControlCommand(
           ? vehicle_param_.max_steer_angle_rate() * ts_ * 180 / M_PI /
                 steer_single_direction_max_degree_ * 100
           : 100.0;
-  // steer_limit = 100
   // steer_diff_with_max_rate = 100
 
   const double steering_position = chassis->steering_percentage();
@@ -631,7 +651,13 @@ Status LatController::ComputeControlCommand(
   debug->set_steer_angle_limited(steer_angle_limited);
 
   // Limit the steering command with the designed digital filter
+  // x对当前steer_angle及前两次的steer_angle（共三个角度）进行系数积累和，求出x
+  // y对前两次滤波后的角度（共两个角度）进行进行系数积累和，求出y
   steer_angle = digital_filter_.Filter(steer_angle);
+  
+  // add my_pid control
+  steer_angle -= angle_pid;
+
   steer_angle = common::math::Clamp(steer_angle, -100.0, 100.0);
 
   // Check if the steer is locked and hence the previous steer angle should be
@@ -705,10 +731,21 @@ void LatController::UpdateState(SimpleLateralDebug *debug) {
     // Transform the coordinate of the vehicle states from the center of the rear-axis to the center of mass, if conditions matched
     const auto &com = vehicle_state->ComputeCOMPosition(lr_);
 
-    const std::string my_log_str = absl::StrCat(
-      com.x(), ",", com.y(), ",", driving_orientation_
-    );
-    my_log_file_ << my_log_str << std::endl;
+    // 提取转为质心的坐标点
+    // 转为字符串没办法限制小数点精度？？
+    // const std::string my_log_str = absl::StrCat(
+    //   com.x(), ",", com.y(), ",", driving_orientation_
+    // );
+    // my_log_file_ << my_log_str << std::endl;
+    my_log_file_ << com.x() << "," << com.y() << "," << driving_orientation_ << std::endl;
+    // 加入当前节点收到的规划的轨迹点（50个点）
+    for(int i = 0; i < 50; i++){
+      if(i > trajectory_analyzer_.trajectory_points().size()){
+        my_log_file_ << -1 << "," << -1 << "," << 0 << std::endl;
+        break;
+      }
+      else my_log_file_ << trajectory_analyzer_.trajectory_points()[i].path_point().x() << "," << trajectory_analyzer_.trajectory_points()[i].path_point().y() << "," << 0 << std::endl;
+    }
 
     ComputeLateralErrors(
         com.x(), com.y(), driving_orientation_,
