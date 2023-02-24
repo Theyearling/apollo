@@ -202,7 +202,7 @@ Status LonController::ComputeControlCommand(
   double station_error_limit =
       lon_controller_conf.station_error_limit();  // 2.0
   double station_error_limited = 0.0;
-  if (FLAGS_enable_speed_station_preview) {  // true
+  if (FLAGS_enable_speed_station_preview) {  // false，在modules/control/conf/control.conf中真正赋值
     station_error_limited =
         common::math::Clamp(debug->preview_station_error(),
                             -station_error_limit, station_error_limit);
@@ -222,19 +222,11 @@ Status LonController::ComputeControlCommand(
           lon_controller_conf.reverse_speed_leadlag_conf());
     }
   } else if (injector_->vehicle_state()->linear_velocity() <=
-<<<<<<< HEAD
              lon_controller_conf.switch_speed()) {  // 3.0
     // kp = 0.2 // ki = 0.3 // kd = 0.0
     speed_pid_controller_.SetPID(lon_controller_conf.low_speed_pid_conf());
   } else {
     // kp = 0.1 // ki = 0.3 // kd = 0.0
-=======
-             lon_controller_conf.switch_speed()) {
-    station_pid_controller_.SetPID(lon_controller_conf.station_pid_conf());
-    speed_pid_controller_.SetPID(lon_controller_conf.low_speed_pid_conf());
-  } else {
-    station_pid_controller_.SetPID(lon_controller_conf.station_pid_conf());
->>>>>>> b00c030ac02c54f98579d3d3e879dbf52f0d1d53
     speed_pid_controller_.SetPID(lon_controller_conf.high_speed_pid_conf());
   }
 
@@ -248,7 +240,7 @@ Status LonController::ComputeControlCommand(
   double speed_controller_input_limit =
       lon_controller_conf.speed_controller_input_limit();
   double speed_controller_input_limited = 0.0;
-  if (FLAGS_enable_speed_station_preview) {  // true
+  if (FLAGS_enable_speed_station_preview) {  // false
     speed_controller_input = speed_offset + debug->preview_speed_error();
   } else {
     speed_controller_input = speed_offset + debug->speed_error();
@@ -270,15 +262,7 @@ Status LonController::ComputeControlCommand(
         speed_leadlag_controller_.InnerstateSaturationStatus());
   }
 
-<<<<<<< HEAD
-  // GRA_ACC = 9.8
-=======
-  if (chassis->gear_location() == canbus::Chassis::GEAR_NEUTRAL) {
-    speed_pid_controller_.Reset_integral();
-    station_pid_controller_.Reset_integral();
-  }
-
->>>>>>> b00c030ac02c54f98579d3d3e879dbf52f0d1d53
+  // GRA_ACC = 9.8 ， 斜率偏移补偿
   double slope_offset_compensation = digital_filter_pitch_angle_.Filter(
       GRA_ACC * std::sin(injector_->vehicle_state()->pitch()));
 
@@ -328,13 +312,9 @@ Status LonController::ComputeControlCommand(
             : std::min(acceleration_cmd,
                        lon_controller_conf.standstill_acceleration());
     ADEBUG << "Stop location reached";
-<<<<<<< HEAD
-    debug->set_is_full_stop(true);  // 貌似只用于csv文件
-=======
     debug->set_is_full_stop(true);
     speed_pid_controller_.Reset_integral();
     station_pid_controller_.Reset_integral();
->>>>>>> b00c030ac02c54f98579d3d3e879dbf52f0d1d53
   }
 
   double throttle_lowerbound =
@@ -349,11 +329,6 @@ Status LonController::ComputeControlCommand(
           ? -acceleration_cmd
           : acceleration_cmd;
 
-<<<<<<< HEAD
-  if (FLAGS_use_preview_speed_for_table) { //false
-    calibration_value = control_interpolation_->Interpolate(
-        std::make_pair(debug->preview_speed_reference(), acceleration_lookup));
-=======
   double acceleration_lookup_limited =
       vehicle_param_.max_acceleration() +
       FLAGS_enable_slope_offset * debug->slope_offset_compensation();
@@ -374,7 +349,6 @@ Status LonController::ComputeControlCommand(
       calibration_value = control_interpolation_->Interpolate(std::make_pair(
           debug->preview_speed_reference(), acceleration_lookup));
     }
->>>>>>> b00c030ac02c54f98579d3d3e879dbf52f0d1d53
   } else {
     if (FLAGS_use_acceleration_lookup_limit) {
       calibration_value = control_interpolation_->Interpolate(

@@ -164,8 +164,7 @@ class LatController : public Controller {
   // number of control cycles look ahead (preview controller)
   int preview_window_ = 0;
 
-  // longitudial length for look-ahead lateral error estimation during forward
-  // driving and look-back lateral error estimation during backward driving
+  // longitudial length for look-ahead lateral error estimation during forward driving and look-back lateral error estimation during backward driving
   // (look-ahead controller)
   double lookahead_station_low_speed_ = 0.0;
   double lookback_station_low_speed_ = 0.0;
@@ -263,6 +262,12 @@ class LatController : public Controller {
   double driving_orientation_ = 0.0;
 
   std::shared_ptr<DependencyInjector> injector_;
+
+  //add my_integral
+  double my_integral = 0.0;
+  //add pre_lateral_err
+  double pre_lateral_err = 0.0;
+
 };
 
 }  // namespace control
