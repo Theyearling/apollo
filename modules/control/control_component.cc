@@ -35,6 +35,27 @@ using apollo::cyber::Clock;
 using apollo::localization::LocalizationEstimate;
 using apollo::planning::ADCTrajectory;
 
+namespace {
+
+std::string myGetLogFileName() {
+  time_t raw_time;
+  char name_buffer[80];
+  std::time(&raw_time);
+  std::tm time_tm;
+  localtime_r(&raw_time, &time_tm);
+  strftime(name_buffer, 80, "/apollo/data/bag/localization.csv",
+           &time_tm);
+  return std::string(name_buffer);
+}
+
+void myWriteData(std::ofstream &file_stream){
+  file_stream << "x,"
+              << "y,"
+              << "heading" << std::endl;
+}
+
+}  // namespace
+
 ControlComponent::ControlComponent()
     : monitor_logger_buffer_(common::monitor::MonitorMessageItem::CONTROL) {}
 
@@ -309,15 +330,7 @@ bool ControlComponent::Proc() {
     AERROR << "planning msg is not ready!";
     return false;
   }
-<<<<<<< HEAD
   OnPlanning(trajectory_msg); // latest_trajectory_ = trajectory_msg
-=======
-  // Check if new planning data received.
-  if (latest_trajectory_.header().sequence_num() !=
-      trajectory_msg->header().sequence_num()) {
-    OnPlanning(trajectory_msg);
-  }
->>>>>>> b00c030ac02c54f98579d3d3e879dbf52f0d1d53
 
   localization_reader_->Observe();
   const auto &localization_msg = localization_reader_->GetLatestObserved();
@@ -385,7 +398,14 @@ bool ControlComponent::Proc() {
     return false;
   }
 
+  localization_log_file_.open(myGetLogFileName(), std::ios::app);
+  localization_log_file_ << std::fixed;
+  localization_log_file_ << std::setprecision(11);
+ 
+  localization_log_file_ << local_view_.localization().pose().position().x() << "," << local_view_.localization().pose().position().y() << "," << curr_vehicle_heading << std::endl; 
+ 
   ControlCommand control_command;
+
 
   Status status;
   if (local_view_.chassis().driving_mode() ==

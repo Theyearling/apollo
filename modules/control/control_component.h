@@ -122,6 +122,9 @@ class ControlComponent final : public apollo::cyber::TimerComponent {
   LocalView local_view_;
 
   std::shared_ptr<DependencyInjector> injector_;
+
+ public:
+    std::ofstream localization_log_file_;
 };
 
 CYBER_REGISTER_COMPONENT(ControlComponent)
